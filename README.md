@@ -2,10 +2,110 @@
 
 **EAG V3 · Session 9**
 
-> **Git / docs index:** [S9SharedCode/README.md](S9SharedCode/README.md) · [docs/SETUP.md](docs/SETUP.md) · [docs/GIT.md](docs/GIT.md) · [docs/BROWSER_CASCADE.md](docs/BROWSER_CASCADE.md)  
-> Copy [`.env.example`](.env.example) → `.env` before running. Session data and secrets are gitignored.
+Multi-agent system that drives a real browser to complete comparison tasks on the live web, then produces a structured comparison table and an **8-section HTML replay report**.
 
-A multi-agent AI system that drives a real browser to answer comparison questions on the live web. Built on top of the Session 8 growing-graph orchestrator — the Browser skill plugs in through `agent_config.yaml` without any changes to the orchestrator itself.
+> Copy [`.env.example`](.env.example) → `.env` before running. Session data and secrets are gitignored.  
+> Further docs: [S9SharedCode/ARCHITECTURE.md](S9SharedCode/ARCHITECTURE.md) · [docs/SETUP.md](docs/SETUP.md) · [docs/BROWSER_CASCADE.md](docs/BROWSER_CASCADE.md)
+
+---
+
+## Assignment Requirements
+
+### 1. At least three visible browser actions
+
+The agent must perform **≥3 visible browser actions** — not passive scraping from search snippets.
+
+| Accepted actions | Examples on Hugging Face |
+|------------------|--------------------------|
+| `click` | Open Tasks filter, open Sort menu, pick “Most Likes” |
+| `scroll` | Reveal more model cards below the fold |
+| `type` / `key` | Search box, confirm with Enter |
+| `select` | Dropdown / tab switch |
+| `submit` | Apply a filter form |
+
+**Not accepted:** Layer-1 HTTP extract only, or reading pre-rendered search snippets with zero interaction.
+
+**How this repo enforces it:**
+
+- Primary task uses base URL `https://huggingface.co/models` with an interactive goal (filter → sort → read cards).
+- `browser/extract_utils.py` skips passive extract when the goal requires interaction.
+- `browser/skill.py` strips pre-filtered query params when the goal mentions filter/sort.
+- `replay_viewer.py` shows a compliance banner and counts visible actions in §4 and §8.
+
+**Example action log (§4 of replay report):**
+
+```text
+Turn 1  click  #12  Tasks filter → Text Generation
+Turn 2  click  #28  Sort menu
+Turn 3  click  #31  Most Likes
+Turn 4  scroll down
+Turn 5  done   success=true
+```
+
+→ **4 visible actions** (filter, sort, sort-option, scroll) — meets requirement.
+
+---
+
+### 2. Structured comparison table + 8-section replay report
+
+After each run, open:
+
+```text
+S9SharedCode/code/state/sessions/<session-id>/report.html
+```
+
+Session index (links to all reports):
+
+```text
+S9SharedCode/code/state/sessions/index.html
+```
+
+The replay viewer (`S9SharedCode/replay_viewer.py`) generates all **8 required sections**:
+
+| § | Section | What it shows | Source |
+|---|---------|---------------|--------|
+| **1** | **Original user goal** | Verbatim query the user asked | `query.txt` |
+| **2** | **Planner DAG** | Visual node graph: planner → browser → distiller → critic → formatter | Session node JSON + planner rationale |
+| **3** | **Browser path chosen** | Winning cascade layer: `extract` / `deterministic` / `a11y` / `vision` / `blocked` | `BrowserOutput.path` (+ `gateway_blocked` when blocked) |
+| **4** | **Browser actions taken** | Turn-by-turn log: click, scroll, type, key, done | `BrowserOutput.actions` |
+| **5** | **Screenshots / page-state logs** | Per-turn PNGs + element legends | `browser/<run>/{a11y\|vision}/turn_*_{raw,marked}.png`, `turn_*_legend.txt` |
+| **6** | **Extracted data** | Distiller structured fields + raw browser/researcher content | Distiller `fields`, browser `content` |
+| **7** | **Final comparison table** | HTML table built from distiller fields (or formatter markdown table) | `_fields_to_table()` in `replay_viewer.py` |
+| **8** | **Turn count & cost summary** | Per-node elapsed time, browser turns, gateway cost by agent | Node results + gateway ledger |
+
+**Compliance banner** (top of report): green ✓ when ≥3 visible actions recorded; red ⚠ when below requirement.
+
+---
+
+## Primary Assignment Task
+
+**Query** (run by `assignment_runner.py`):
+
+> Compare top 3 Hugging Face **text-generation** models sorted by **likes**.  
+> Use the browser on `https://huggingface.co/models` (base URL).  
+> Perform at least three visible browser actions (filter Tasks, sort by Most Likes, read model cards).  
+> For each model: model name, organisation, likes, parameter count (if listed), one-line description.
+
+**Expected DAG:**
+
+```text
+Planner → Browser (a11y or vision) → Distiller → [auto Critic] → Formatter
+```
+
+**Why browser is required:**
+
+- `huggingface.co/models` is JavaScript-rendered — static fetch returns no model cards.
+- Tasks filter and Sort dropdown are interactive widgets — they must be clicked, not URL-encoded.
+
+**Example comparison table (§7):**
+
+| Model Name | Organisation | Likes | Parameter Count | Description |
+|------------|--------------|-------|-----------------|-------------|
+| deepseek-ai/DeepSeek-R1 | deepseek-ai | 13.4k | 685B | Strong reasoning model |
+| meta-llama/Llama-3.1-8B | meta-llama | 12.1k | 8B | General-purpose text generation |
+| mistralai/Mistral-7B-v0.3 | mistralai | 9.8k | 7B | Efficient open-weight LLM |
+
+*(Actual rows come from the live run — numbers change on huggingface.co.)*
 
 ---
 
@@ -16,444 +116,177 @@ A multi-agent AI system that drives a real browser to answer comparison question
 cd llm_gatewayV9
 uv run main.py
 
-# 2. Run the comparison task
-cd S9SharedCode/code
-uv run python assignment_runner.py
+# 2. Install browser once
+cd ../S9SharedCode/code
+uv sync && uv run playwright install chromium
 
-# 3. Generate the HTML report
-uv run python html_report.py
-
-# OR — do all three steps with one command:
-cd S9SharedCode
+# 3. Run assignment + generate report (one command)
+cd ..
 ./run_assignment.sh
+
+# 4. Open the replay report
+xdg-open code/state/sessions/index.html
+# or for latest session:
+python3 replay_viewer.py --open
 ```
+
+**Other tasks** (all produce the same 8-section report):
+
+```bash
+./run_assignment.sh laptops       # 3 laptops under ₹80k
+./run_assignment.sh hf_text_gen    # HF text-gen by likes (primary)
+./run_assignment.sh ai_tools       # 5 AI coding tools pricing
+./run_assignment.sh cnc_training   # CNC institutes Bangalore
+./run_assignment.sh all            # run all four
+./run_assignment.sh report <sid>   # regenerate report only
+```
+
+---
+
+## Replay Report — Section Details
+
+Below is exactly what each section contains in `report.html`.
+
+### §1 Original user goal
+
+The full comparison query as typed by the user, stored in `state/sessions/<sid>/query.txt`.
+
+### §2 Planner DAG
+
+Left-to-right visual of every node executed in the session:
+
+```text
+STEP 1        STEP 2        STEP 3        STEP 4        STEP 5
+planner   →   browser   →   distiller →   critic    →   formatter
+✓ complete    ✓ complete    ✓ complete    ✓ complete    ✓ complete
+```
+
+Includes planner rationale and skill chain (`planner → browser → distiller → formatter`).
+
+### §3 Browser path chosen
+
+| Layer | Meaning |
+|-------|---------|
+| `extract` | Static HTML via httpx + trafilatura ($0 LLM) |
+| `deterministic` | Playwright + CSS selectors ($0 LLM) |
+| `a11y` | Accessibility tree + text LLM per turn |
+| `vision` | Set-of-marks screenshot + vision model per turn |
+| `blocked` | CAPTCHA / login wall / Cloudflare (`gateway_blocked`) |
+
+Shows node id, path, turn count, URL, and status per browser node.
+
+### §4 Browser actions taken
+
+Turn-by-turn table for each browser node:
+
+| Turn | Actions | Outcome |
+|------|---------|---------|
+| 1 | `click #12` | ok |
+| 2 | `click #28` | ok |
+| 3 | `click #31` | ok |
+| 4 | `scroll down` | ok |
+| 5 | `done success=true` | done(True) |
+
+Header shows **visible action count** vs the ≥3 requirement.
+
+### §5 Screenshots / page-state logs
+
+- Grid of embedded PNG screenshots (`turn_01_raw.png`, `turn_01_marked.png` for vision layer)
+- Collapsible element legends (`turn_01_legend.txt`) — the numbered element list sent to the LLM each turn
+
+Stored under: `state/sessions/<sid>/browser/browser_<timestamp>/{a11y|vision}/`
+
+### §6 Extracted data
+
+- **Distiller fields** — structured key/value pairs prefixed by entity (`model_name`, `likes`, `organisation`, …)
+- **Raw browser content** — collapsible page text from the browser node
+
+### §7 Final comparison table
+
+HTML table pivoted from distiller fields. If the formatter also produced a markdown table, both are shown.
+
+Built by `_fields_to_table()` in `replay_viewer.py` from distiller output like:
+
+```json
+{
+  "deepseek-ai_DeepSeek-R1_model_name": "deepseek-ai/DeepSeek-R1",
+  "deepseek-ai_DeepSeek-R1_likes": "13.4k",
+  "deepseek-ai_DeepSeek-R1_organisation": "deepseek-ai"
+}
+```
+
+### §8 Turn count & cost summary
+
+| Metric | Example |
+|--------|---------|
+| Total nodes | 7 |
+| Browser turns | 5 |
+| Visible browser actions | 4 (meets requirement) |
+| Total elapsed | 47.3s |
+| Gateway cost | $0.0021 (planner + browser + distiller + formatter) |
+
+Per-node breakdown: skill, status, elapsed, browser turns, provider.
+
+---
+
+## Browser Cascade (summary)
+
+The browser skill (`S9SharedCode/code/browser/skill.py`) escalates through four layers until one succeeds:
+
+```text
+Layer 1  extract        httpx + trafilatura          ($0 LLM)
+Layer 2a deterministic  Playwright + CSS selectors  ($0 LLM)
+Layer 2b a11y           Playwright + text LLM         (cheap)
+Layer 3  vision         Playwright + vision LLM       (expensive)
+```
+
+Precondition: **gateway_blocked** stops immediately on CAPTCHA / login wall.
+
+Full cascade reference: [docs/BROWSER_CASCADE.md](docs/BROWSER_CASCADE.md)
 
 ---
 
 ## Project Structure
 
-```
+```text
 Assignment 9/
-├── .env                              ← API keys (Gemini, Groq, NVIDIA, etc.)
-│
-├── llm_gatewayV9/                    ← Gateway service (port 8109)
-│   ├── main.py                       ← FastAPI server entry point
-│   ├── router.py                     ← Provider failover logic
-│   ├── providers.py                  ← Gemini / Groq / NVIDIA adapters
-│   ├── agent_routing.yaml            ← Per-agent provider pins
-│   └── gateway_v9.db                 ← SQLite cost ledger
-│
+├── .env.example
+├── llm_gatewayV9/              Gateway service (port 8109)
 └── S9SharedCode/
-    ├── run_assignment.sh             ← End-to-end runner script
+    ├── run_assignment.sh       End-to-end runner
+    ├── replay_viewer.py        8-section HTML report generator
     └── code/
-        ├── flow.py                   ← Orchestrator: growing DAG executor
-        ├── skills.py                 ← Skill registry + per-node dispatcher
-        ├── agent_config.yaml         ← Skill catalogue (yaml)
-        ├── schemas.py                ← Pydantic contracts (AgentResult, BrowserOutput, etc.)
-        ├── recovery.py               ← Failure classification + recovery decisions
-        ├── persistence.py            ← Session state to/from disk
-        ├── memory.py                 ← FAISS vector memory
-        ├── replay.py                 ← CLI session replay viewer
-        │
-        ├── browser/                  ← The Browser skill (Session 9 addition)
-        │   ├── skill.py              ← Cascade wrapper (the main entry point)
-        │   ├── driver.py             ← A11yDriver and SetOfMarksDriver
-        │   ├── dom.py                ← Interactive-element enumeration (JS + Python)
-        │   ├── highlight.py          ← Set-of-marks annotation (Pillow)
-        │   └── client.py             ← V9 gateway HTTP client
-        │
-        ├── prompts/
-        │   ├── planner.md            ← Planner instructions and DAG examples
-        │   ├── browser.md            ← Browser skill prompt
-        │   ├── distiller.md          ← Distiller prompt
-        │   ├── critic.md             ← Critic prompt
-        │   └── formatter.md          ← Formatter prompt
-        │
-        ├── assignment_runner.py      ← Runs the comparison task
-        ├── html_report.py            ← Generates the HTML replay report
-        │
-        └── state/
-            └── sessions/
-                ├── index.html        ← Links to all session reports
-                └── <session-id>/
-                    ├── query.txt
-                    ├── graph.json
-                    ├── nodes/        ← Per-node JSON state files
-                    ├── browser/      ← Screenshots per turn
-                    └── report.html   ← Generated HTML report
+        ├── assignment_runner.py
+        ├── flow.py               Orchestrator (growing DAG)
+        ├── browser/skill.py      Four-layer cascade
+        ├── html_report.py        Wrapper → replay_viewer
+        └── state/sessions/
+            ├── index.html        Links to all reports
+            └── <session-id>/
+                ├── query.txt
+                ├── nodes/        Per-node JSON
+                ├── browser/      Screenshots + legends
+                └── report.html   ← 8-section replay (submission artifact)
 ```
 
 ---
 
-## The Browser Skill — Four-Layer Cascade
-
-The Browser skill (`browser/skill.py`) always tries the cheapest path first and escalates only when it fails. The path actually used is recorded in `BrowserOutput.path`.
-
-### Path 1: `extract`
-
-**Code:** `browser/skill.py` → `_fetch_html()` + `_extract()`  
-**Libraries:** `httpx` (HTTP client), `trafilatura` (article extractor)  
-**LLM cost:** $0.00 — no model is called  
-**Browser:** none — plain HTTP GET  
-
-```
-httpx.get(url)  →  trafilatura.extract(html)  →  content
-```
-
-**Fires when:** A plain HTTP download returns useful article text.  
-**Fails when:**
-- The page content is JavaScript-rendered (the raw HTML contains no data)
-- The `goal` contains interactive verbs: `click`, `fill`, `select`, `type`, `drag`, `filter`, `sort`, `submit`, `navigate`
-- Extracted content is fewer than 200 characters
-- The page returns a CAPTCHA or Cloudflare challenge (`gateway_blocked`)
-
-**Output fields set:**
-- `path = "extract"`
-- `turns = 0`
-- `content` = extracted article text
-- `final_url` = URL after any redirects
-
----
-
-### Path 2a: `deterministic`
-
-**Code:** `browser/skill.py` → `_try_deterministic()`  
-**Libraries:** `playwright` (headless Chrome)  
-**LLM cost:** $0.00 — no model is called  
-**Browser:** headless Chromium  
-
-```
-page.goto(url)
-for each step in metadata.selectors:
-    page.locator(step["selector"]).click() / .fill()
-trafilatura.extract(page.content())  →  content
-```
-
-**Fires when:** The Planner passes `metadata.selectors` — a list of explicit CSS selector steps. Example:
-```yaml
-metadata:
-  selectors:
-    - {action: "click", selector: "input[name=q]"}
-    - {action: "fill",  selector: "input[name=q]", value: "python tutorial"}
-    - {action: "key",   value: "Enter"}
-```
-
-**Supported actions:** `click`, `fill`, `key`  
-**Fails when:** Any selector is not found on the page (visible + timeout 8s). Falls through to Layer 2b — does NOT raise an error.
-
-**Output fields set:**
-- `path = "deterministic"`
-- `turns` = number of selector steps executed
-- `content` = extracted text after all steps
-- `final_url` = final page URL
-
----
-
-### Path 2b: `a11y`
-
-**Code:** `browser/skill.py` → `_drive(A11yDriver, ...)`  
-**Driver:** `browser/driver.py` → `A11yDriver`  
-**Element enumeration:** `browser/dom.py` → `enumerate_interactives()`  
-**Libraries:** `playwright`, gateway `/v1/chat`  
-**LLM cost:** cheap text model per turn (no image sent)  
-**Browser:** headless Chromium  
-
-**How it works per turn:**
-1. `enumerate_interactives(page)` runs a JavaScript snippet in the page that collects every visible interactive element — `<a>`, `<button>`, `<input>`, `<select>`, elements with `role=button/tab/menuitem/etc.`, `cursor:pointer` elements. SVG primitives and nested duplicates are deduped.
-2. Each element becomes a legend line: `[42]<button>Sort: Most Downloads</button>`
-3. The legend (text only, no screenshot) is sent to the cheap text LLM via `/v1/chat` with the goal and recent action history.
-4. The model returns a JSON action list: `[{"type":"click","mark":42}]`
-5. The action is dispatched by `driver.py` → `_dispatch()`.
-6. Repeat up to `max_steps_a11y` (default 12) turns.
-
-**Action vocabulary:**
-
-| Action | Parameters | What it does |
-|---|---|---|
-| `click` | `mark` (int) | Click the centre of element #mark |
-| `type` | `mark`, `value`, `clear?` | Focus element, optionally select-all, then type |
-| `key` | `value` | Press a keyboard key (Enter, Tab, Escape, ArrowDown…) |
-| `scroll` | `direction`, `amount?` | Scroll the page (up / down / left / right) |
-| `wait` | `seconds` | Sleep to let the page settle |
-| `done` | `success`, `note` | Finish; success=true if goal is met |
-
-**Critical a11y rules (enforced in prompt):**
-- Max 2 actions per turn
-- Dropdown triggers (names ending in `▾` or `:`) must be the ONLY action in their turn — the popover options only appear in the next turn
-- Never bundle `done` with other actions
-
-**Artifacts saved per turn** (when `artifacts_dir` is set):
-- `turn_01_raw.png` — raw screenshot of the page state
-- `turn_01_legend.txt` — the element legend sent to the model
-
-**Fires when:** Layer 1 fails AND no selectors were provided (or selectors failed).  
-**Fails when:** `max_steps_a11y` turns exhausted without `done(success=true)`. Falls through to Layer 3.
-
-**Output fields set:**
-- `path = "a11y"`
-- `turns` = number of turns taken by the A11yDriver
-- `content` = page text extracted after final turn
-- `actions` = list of `{turn, actions, outcome}` dicts
-- `final_url` = final page URL
-
----
-
-### Path 3: `vision`
-
-**Code:** `browser/skill.py` → `_drive(SetOfMarksDriver, ...)`  
-**Driver:** `browser/driver.py` → `SetOfMarksDriver`  
-**Annotation:** `browser/highlight.py` → `annotate()`  
-**Libraries:** `playwright`, `Pillow`, gateway `/v1/vision`  
-**LLM cost:** vision model per turn (screenshot + prompt)  
-**Browser:** headless Chromium  
-
-**How it works per turn:**
-1. Same `enumerate_interactives()` as a11y — gets element bounding boxes.
-2. `page.screenshot()` captures the current viewport as PNG bytes.
-3. `highlight.annotate(png, elements, dpr)` draws **dashed numbered boxes** over every element using Pillow:
-   - Colour-coded by tag: blue=links, green=buttons, orange=inputs, purple=selects, red=other
-   - DPR-scaled: CSS pixels × devicePixelRatio so boxes land correctly on retina screenshots
-   - Number badge: filled rect + white text in top-left corner of each box
-4. The annotated PNG is base64-encoded and sent to `/v1/vision` alongside the legend and goal.
-5. The vision model picks a box number; the driver dispatches the click.
-
-**Artifacts saved per turn** (when `artifacts_dir` is set):
-- `turn_01_raw.png` — raw screenshot before annotation
-- `turn_01_marked.png` — annotated screenshot with numbered boxes
-- `turn_01_legend.txt` — the element legend
-
-**Fires when:** Both a11y and all earlier layers exhausted without success.  
-**Also fires when:** `metadata.force_path = "vision"` is set (bypasses a11y entirely — used in tests).
-
-**Output fields set:**
-- `path = "vision"`
-- `turns` = number of turns taken by SetOfMarksDriver
-- `content` = page text extracted after final turn
-- `actions` = list of `{turn, actions, outcome}` dicts
-- `final_url` = final page URL
-
----
-
-### Precondition: `gateway_blocked`
-
-**Code:** `browser/skill.py` → `detect_gateway_block()`  
-**Checked at:** Layer 1 (on raw HTML) AND after page load in Playwright (on rendered HTML)
-
-This is checked before and during every layer. If the page is a block page, the skill returns immediately with `error_code="gateway_blocked"` — no further layers are attempted.
-
-**Detected patterns:**
-
-| Type | Markers |
-|---|---|
-| CAPTCHA | "Let's confirm you are human", "Robot Check", "Please verify you are a human" |
-| hCaptcha | `class="h-captcha"`, `data-hcaptcha-widget-id` |
-| reCAPTCHA | `class="g-recaptcha"`, `g-recaptcha-response` |
-| Cloudflare | "Checking your browser before accessing", `cf-browser-verification`, `cf-challenge-running` |
-| Login wall | "You must be logged in", "Sign in to continue", "Please log in to continue" |
-
-**What the orchestrator does:** The Planner receives `gateway_blocked` in the failure report and its prompt tells it: *"Do NOT retry the same URL — pick a different source or hand back to the user."*
-
----
-
-## Cascade Decision Flow
-
-```
-BrowserSkill.run(NodeSpec)
-│
-├─ fetch HTML via httpx
-│   ├─ HTTP error → skip Layer 1, fall through
-│   ├─ gateway_blocked → return error_code="gateway_blocked"  STOP
-│   ├─ _is_useful_extract() passes → return path="extract"    STOP
-│   └─ not useful → continue
-│
-├─ metadata.selectors provided?
-│   ├─ YES → _try_deterministic()
-│   │   ├─ all selectors found & executed → return path="deterministic"  STOP
-│   │   └─ any selector missing → fall through to a11y
-│   └─ NO → skip Layer 2a
-│
-├─ force_path == "vision"?
-│   ├─ YES → skip a11y entirely
-│   └─ NO → run A11yDriver (up to max_steps_a11y turns)
-│       ├─ gateway_blocked detected after render → return error_code="gateway_blocked"  STOP
-│       ├─ done(success=true) within turn cap → return path="a11y"  STOP
-│       └─ turn cap hit or max failures → fall through
-│
-└─ run SetOfMarksDriver (up to max_steps_vision turns)
-    ├─ gateway_blocked detected → return error_code="gateway_blocked"  STOP
-    ├─ done(success=true) within turn cap → return path="vision"  STOP
-    └─ turn cap hit → return error_code="interaction_failed"  STOP
-```
-
----
-
-## Error Codes (`AgentResult.error_code`)
-
-Defined in `schemas.py`. Only the Browser skill sets these; other skills leave `error_code=None`.
-
-| Code | Meaning | Orchestrator action |
-|---|---|---|
-| `gateway_blocked` | CAPTCHA / login wall / Cloudflare stopped the page | Planner re-routes to a different URL or tells the user |
-| `extraction_failed` | Page rendered but no useful content extracted | Recovery planner tries a different approach |
-| `interaction_failed` | Turn cap reached without completing the goal | Recovery planner retries with different metadata |
-| `timeout` | Wall-clock cap hit (default 90s) | Recovery planner retries |
-| `vlm_unavailable` | All vision providers refused (503/refused) | Recovery planner falls back to a11y-only attempt |
-
----
-
-## `BrowserOutput` Schema
-
-```python
-class BrowserOutput(BaseModel):
-    url: str                  # The URL passed in metadata.url
-    goal: str                 # The goal passed in metadata.goal
-    path: Literal[
-        "extract",            # Layer 1 succeeded
-        "deterministic",      # Layer 2a succeeded
-        "a11y",               # Layer 2b succeeded
-        "vision",             # Layer 3 succeeded
-    ]
-    turns: int                # Number of turns the winning layer took (0 for extract/deterministic)
-    content: str | None       # Extracted page text (for extract/deterministic/a11y/vision)
-    actions: list[dict]       # Per-turn action log from the winning driver [{turn, actions, outcome}]
-    final_url: str | None     # Page URL after all navigation
-```
-
----
-
-## How to Invoke the Browser Skill (Planner syntax)
-
-The Planner emits a `browser` node like this:
-
-```json
-{
-  "skill": "browser",
-  "inputs": [],
-  "metadata": {
-    "label": "b1",
-    "url": "https://huggingface.co/models",
-    "goal": "Filter Tasks=Text-to-Image, Sort=Most Downloads; extract the top 3 model cards with name, downloads, likes, and description."
-  }
-}
-```
-
-**Rules:**
-- Always assign a `metadata.label` so the downstream distiller can reference it as `"n:b1"`
-- Pass the **base URL** — do not pre-encode filters in the query string; describe them in `goal` instead
-- Do NOT set `force_path` in production — let the cascade decide
-- Do NOT list `USER_QUERY` in `inputs` — scope via `goal` instead
-
----
-
-## Recovery Flow
-
-When a node fails, `flow.py` calls `recovery.plan_recovery()`:
-
-| Failure reason | Action | Note |
-|---|---|---|
-| `transient` (502/503/504/timeout) | `skip` | Gateway already retried; no re-plan |
-| `validation_error` (malformed NodeSpec) | `skip` | Prompt bug, not a runtime issue |
-| `upstream_failure` on planner | `skip` | Would cause infinite planner loop |
-| `upstream_failure` on any other skill | `replan` | New Planner node queued with failure report + prior successful node ids |
-
-When a **Critic** fails (verdict=`"fail"`):
-1. The downstream formatter node is marked `skipped`
-2. A new Planner node is queued with `failure_report` containing the critic's rationale
-3. A per-target cap prevents infinite critic-fail loops (second failure → branch abandoned)
-
----
-
-## Session State on Disk
-
-Every run persists to `state/sessions/<session-id>/`:
-
-```
-state/sessions/s8-69e0995c/
-├── query.txt                     ← Verbatim user query
-├── graph.json                    ← NetworkX DAG (node_link_data format)
-├── nodes/
-│   ├── n_001.json                ← NodeState for node n:1 (planner)
-│   ├── n_002.json                ← NodeState for node n:2 (browser)
-│   └── ...
-├── browser/
-│   └── browser_<timestamp>/
-│       ├── a11y/
-│       │   ├── turn_01_raw.png   ← Raw screenshot, turn 1
-│       │   ├── turn_01_legend.txt
-│       │   └── ...
-│       └── vision/
-│           ├── turn_01_raw.png
-│           ├── turn_01_marked.png ← Set-of-marks annotated screenshot
-│           ├── turn_01_legend.txt
-│           └── ...
-├── architecture_note.txt         ← Written by assignment_runner.py
-└── report.html                   ← Generated by html_report.py
-```
-
----
-
-## Viewing Reports
-
-```bash
-# Generate report for the most recent session
-cd S9SharedCode/code
-uv run python html_report.py
-
-# Generate report for a specific session
-uv run python html_report.py s8-69e0995c
-
-# Generate reports for ALL sessions at once
-for sid in $(ls state/sessions/); do uv run python html_report.py "$sid"; done
-
-# Open the session index (links to all reports)
-xdg-open state/sessions/index.html
-
-# CLI text replay (node by node, press Enter to advance)
-uv run python replay.py s8-69e0995c
-```
-
----
-
-## Assignment Task
-
-**Query:**
-> *"Compare the top 3 Hugging Face text-to-image models sorted by most downloads. For each model provide: model name, number of downloads, number of likes, and a one-line description of what it does."*
-
-**Why this needs Browser (not just `fetch_url`):**
-- `huggingface.co/models` renders its listing entirely in JavaScript — the raw HTML contains no model cards
-- The filter (text-to-image) and sort (most downloads) are interactive widgets — they must be clicked, not URL-encoded
-
-**Cascade path taken:** `vision` (Layer 3)
-- Layer 1 failed: JS-rendered content
-- Layer 2b (a11y): 12 turns, turn cap exhausted without completing the goal
-- Layer 3 (vision): 5 turns with set-of-marks → `done(success=true)`
-- Final URL: `https://huggingface.co/models?pipeline_tag=text-to-image&sort=downloads`
-
-**Result:**
-
-| Rank | Model | Downloads | Likes |
-|---|---|---|---|
-| 1 | tencent/HunyuanImage-3.0 | 1.07M | 1.09k |
-| 2 | black-forest-labs/FLUX.1-dev | 1.02M | 13.1k |
-| 3 | Tongyi-MAI/Z-Image-Turbo | 865k | 4.79k |
+## Submission Checklist
+
+- [ ] Live run completes with **≥3 visible browser actions** (check §4 banner in `report.html`)
+- [ ] `report.html` contains all **8 sections** listed above
+- [ ] §7 shows a **structured comparison table** (not raw JSON)
+- [ ] Session trace persisted under `S9SharedCode/code/state/sessions/<sid>/`
+- [ ] Gateway + Playwright installed (`uv sync`, `playwright install chromium`)
+- [ ] Repo pushed to GitHub with this README
 
 ---
 
 ## Dependencies
 
-```toml
-# S9SharedCode/code/pyproject.toml (key packages)
-playwright>=1.47      # headless browser control
-pillow>=10.0          # set-of-marks annotation
-trafilatura>=1.12     # article text extraction
-httpx                 # HTTP client for Layer 1
-faiss-cpu>=1.8.0      # vector memory (Session 7)
-networkx>=3.2         # DAG orchestration (Session 8)
-pydantic>=2.13.4      # typed contracts between all layers
-```
-
-Install once:
 ```bash
 cd S9SharedCode/code && uv sync
 uv run playwright install chromium
 ```
+
+Key packages: `playwright`, `pillow`, `trafilatura`, `httpx`, `networkx`, `pydantic`, `faiss-cpu`
