@@ -11,8 +11,9 @@ Use these when:
   - The user query matches a known demo pattern (HF models by likes, AI tools
     pricing, laptop comparison, CNC institutes Bangalore).
   - A browser node failed with step cap or Page.evaluate errors on
-    huggingface.co — call get_hf_models_url() and retry browser with the
-    returned url and goal (read visible cards; do NOT click filter widgets).
+    huggingface.co — retry browser ONCE with the same base URL and a
+    narrower goal. If still failing, call get_hf_models_url() and use
+    fallback_url + fallback_goal (pre-filtered read — last resort only).
   - A browser node failed on justdial.com or with ERR_HTTP2_PROTOCOL_ERROR
     for a CNC/VMC Bangalore query — call get_cnc_browser_url() and retry
     browser with the returned Sulekha url and goal.
@@ -52,11 +53,14 @@ Available skills:
                      can verify success (e.g., "filter Tasks=Text
                      Generation, Libraries=Transformers, Sort=Most
                      Likes; then extract the top 3 model cards").
-                     IMPORTANT: for HuggingFace models-by-likes, prefer the
-                     pre-filtered URL from get_hf_models_url() in metadata.url
-                     (read visible cards; minimal interaction). For other
-                     interactive listings where filter-driving is the point,
-                     pass the BASE URL and describe filters in `goal`.
+                     IMPORTANT: for HuggingFace models-by-likes, use the BASE
+                     URL `https://huggingface.co/models` and describe filter +
+                     sort steps in `goal` so the browser performs at least
+                     three visible actions (filter Tasks, open sort menu, pick
+                     Most Likes, read cards). Passive scraping from search
+                     snippets is not accepted. Only use the pre-filtered
+                     fallback_url from get_hf_models_url() when interactive
+                     widgets fail after a retry.
                      Do NOT set metadata.force_path. Let the
                      cascade choose its own layer; the skill knows
                      how to escalate from extract → a11y → vision
@@ -185,9 +189,9 @@ in the INPUTS block.
     ONLY a new distiller (wired to all successful browser `n:*` ids in
     INPUTS) and a formatter. Do NOT re-run browsers unless a browser
     node itself failed or returned empty content.
-    - Browser step-cap or HF Page.evaluate failure: call
-    get_hf_models_url(), then emit ONE browser with the returned url
-    and goal (read visible cards — no filter-widget clicks).
+    - Browser step-cap or HF Page.evaluate failure: retry ONCE with base URL
+    and interactive goal. If still failing, call get_hf_models_url() and use
+    fallback_url + fallback_goal (pre-filtered read — last resort).
   - Browser failure on justdial.com or ERR_HTTP2_PROTOCOL_ERROR for CNC
     Bangalore queries: call get_cnc_browser_url(), emit ONE browser on
     the returned Sulekha url (scroll listing; extract 5 institutes).
@@ -264,15 +268,15 @@ Example — browser comparison on a listing page (laptops):
    {"skill":"formatter","inputs":["USER_QUERY","n:d1"],
     "metadata":{"label":"out"}}]}
 
-Example — Hugging Face text-generation by likes (prefer pre-filtered URL):
+Example — Hugging Face text-generation by likes (interactive — base URL):
 Call get_hf_models_url("text-generation", "likes") first; use returned url + goal.
-{"rationale": "Browser reads pre-sorted HF listing; distiller extracts top 3 cards.",
+{"rationale": "Browser applies HF filters interactively; distiller extracts top 3 cards.",
  "nodes": [
    {"skill":"browser",
     "inputs":[],
     "metadata":{"label":"b1",
-                "url":"https://huggingface.co/models?pipeline_tag=text-generation&sort=likes",
-                "goal":"Read the visible model listing. Extract top 3 model cards with name, organisation, likes, parameter count, and description."}},
+                "url":"https://huggingface.co/models",
+                "goal":"Filter Tasks=Text Generation, Sort=Most Likes; extract top 3 model cards with name, organisation, likes, parameter count, and description. Use at least three visible browser actions (filter, sort, read cards)."}},
    {"skill":"distiller",
     "inputs":["n:b1"],
     "metadata":{"label":"d1","question":"Extract model name, organisation, likes, parameter count, description for each of the top 3 models."}},

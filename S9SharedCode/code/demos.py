@@ -11,17 +11,31 @@ from urllib.parse import urlencode
 # pipeline_tag values match huggingface.co/models filter API
 HF_DEFAULT_PIPELINE = "text-generation"
 HF_DEFAULT_SORT = "likes"
+HF_BASE_URL = "https://huggingface.co/models"
 
 
 def hf_models_url(
     pipeline_tag: str = HF_DEFAULT_PIPELINE,
     sort: str = HF_DEFAULT_SORT,
 ) -> str:
-    """Pre-filtered HuggingFace models listing (avoids interactive filter clicks)."""
-    return f"https://huggingface.co/models?{urlencode({'pipeline_tag': pipeline_tag, 'sort': sort})}"
+    """Pre-filtered HuggingFace models listing (recovery fallback only)."""
+    return f"{HF_BASE_URL}?{urlencode({'pipeline_tag': pipeline_tag, 'sort': sort})}"
+
+
+def hf_models_goal_interactive(*, limit: int = 3) -> str:
+    """Goal that requires filter + sort + read — satisfies the 3+ action requirement."""
+    return (
+        f"On the Hugging Face models page, perform at least three visible browser "
+        f"actions: (1) filter Tasks=Text Generation, (2) sort by Most Likes, "
+        f"(3) read the top {limit} model cards. "
+        f"For each card extract: name, organisation, likes, parameter count if "
+        f"listed, and a one-line description. "
+        f"Passive scraping from search snippets is not acceptable."
+    )
 
 
 def hf_models_goal(*, limit: int = 3) -> str:
+    """Passive read goal — only for recovery when interactive widgets fail."""
     return (
         f"Read the visible model listing (already filtered and sorted). "
         f"Extract the top {limit} model cards: name, organisation, likes, "
@@ -93,20 +107,18 @@ DEMO_REGISTRY: dict[str, dict] = {
     "hfmodels": {
         "query": (
             "What are the top 3 text-generation models on Hugging Face sorted "
-            "by most likes? For each give the model name, organisation, number "
-            "of likes, parameter count if listed, and a one-line description "
-            "of what it is good for."
+            "by most likes? Use the browser on https://huggingface.co/models "
+            "and perform at least three visible actions (filter, sort, read cards). "
+            "For each give the model name, organisation, number of likes, "
+            "parameter count if listed, and a one-line description of what it "
+            "is good for."
         ),
         "shape": "planner -> browser -> distiller -> CRITIC -> formatter",
         "browser_hint": {
-            "url": hf_models_url(),
-            "goal": hf_models_goal(),
-            "url_interactive_fallback": "https://huggingface.co/models",
-            "goal_interactive": (
-                "Filter Tasks=Text Generation, Sort=Most Likes; extract top 3 "
-                "model cards with name, organisation, likes, parameter count, "
-                "and description."
-            ),
+            "url": HF_BASE_URL,
+            "goal": hf_models_goal_interactive(),
+            "fallback_url": hf_models_url(),
+            "fallback_goal": hf_models_goal(),
         },
     },
     "cnc": {
@@ -175,14 +187,17 @@ def get_hf_models_url(
     pipeline_tag: str = HF_DEFAULT_PIPELINE,
     sort: str = HF_DEFAULT_SORT,
 ) -> dict:
-    url = hf_models_url(pipeline_tag=pipeline_tag, sort=sort)
     return {
-        "url": url,
+        "url": HF_BASE_URL,
         "pipeline_tag": pipeline_tag,
         "sort": sort,
-        "goal": hf_models_goal(),
+        "goal": hf_models_goal_interactive(),
+        "fallback_url": hf_models_url(pipeline_tag=pipeline_tag, sort=sort),
+        "fallback_goal": hf_models_goal(),
         "note": (
-            "Use this URL in browser metadata when interactive filter clicks "
-            "fail or hit the step cap. Page is pre-sorted; read visible cards only."
+            "PRIMARY: base URL + interactive goal (filter Tasks, sort by likes, "
+            "read cards — at least 3 visible browser actions). "
+            "Use fallback_url + fallback_goal ONLY when filter widgets fail or "
+            "the step cap is hit after one retry."
         ),
     }

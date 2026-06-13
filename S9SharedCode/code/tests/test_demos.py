@@ -19,7 +19,8 @@ def test_get_demo_hfmodels():
     assert d["name"] == "hfmodels"
     assert "text-generation" in d["query"] or "text generation" in d["query"].lower()
     assert "browser_hint" in d
-    assert "huggingface.co/models" in d["browser_hint"]["url"]
+    assert d["browser_hint"]["url"] == "https://huggingface.co/models"
+    assert "filter" in d["browser_hint"]["goal"].lower()
 
 
 def test_get_demo_unknown_raises():
@@ -39,9 +40,11 @@ def test_hf_models_url_prefiltered():
 
 def test_get_hf_models_url_returns_goal():
     out = get_hf_models_url()
-    assert out["url"] == hf_models_url()
-    assert "Extract" in out["goal"]
+    assert out["url"] == "https://huggingface.co/models"
+    assert "filter" in out["goal"].lower()
     assert out["pipeline_tag"] == "text-generation"
+    assert "fallback_url" in out
+    assert "pipeline_tag=text-generation" in out["fallback_url"]
 
 
 def test_get_cnc_browser_url_sulekha():

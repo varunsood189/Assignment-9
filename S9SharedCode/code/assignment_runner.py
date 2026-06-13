@@ -19,10 +19,19 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from flow import Executor
-from html_report import build_session_index, write_report
+from html_report import (
+    build_session_index,
+    count_interactive_browser_actions,
+    load_session,
+    write_report,
+)
 
 COMPARISON_QUERY = (
     "Compare top 3 Hugging Face text-generation models sorted by likes. "
+    "Use the browser on https://huggingface.co/models (base URL only). "
+    "You must perform at least three visible browser actions — such as applying "
+    "the Tasks filter, opening the Sort menu, selecting Most Likes, and reading "
+    "model cards. Passive scraping from search snippets is not acceptable. "
     "For each model give the model name, organisation, number of likes, "
     "parameter count if listed, and a one-line description of what it is good for."
 )
@@ -59,7 +68,10 @@ async def run_comparison() -> str:
     await executor.run(COMPARISON_QUERY)
 
     sessions_dir = Path(__file__).parent / "state" / "sessions"
-    sessions = sorted(sessions_dir.iterdir(), key=lambda p: p.stat().st_mtime)
+    sessions = sorted(
+        (p for p in sessions_dir.iterdir() if p.is_dir() and p.name.startswith("s")),
+        key=lambda p: p.stat().st_mtime,
+    )
     if not sessions:
         print("[assignment] warning: no session directory found after run")
         return ""
@@ -74,10 +86,19 @@ async def run_comparison() -> str:
     report = write_report(sid)
     build_session_index()
 
+    _, nodes = load_session(sid)
+    action_count = count_interactive_browser_actions(nodes)
+    action_note = (
+        f"✓ {action_count} visible browser actions recorded (requirement: ≥3)"
+        if action_count >= 3
+        else f"⚠ only {action_count} visible browser actions (requirement: ≥3)"
+    )
+
     print()
     print("=" * 72)
     print(f"Session: {sid}")
     print(f"Report:  {report}")
+    print(f"Actions: {action_note}")
     print()
     print(ARCHITECTURE_NOTE)
     print("=" * 72)

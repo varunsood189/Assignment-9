@@ -98,19 +98,45 @@ def collapsible(label, body, open_=False, accent="#6b7280"):
 </details>"""
 
 # ── load session ──────────────────────────────────────────────────────────────
+def _is_session_dir(path: pathlib.Path) -> bool:
+    """True for session directories (s9-abc123), not index.html or other files."""
+    return path.is_dir() and path.name.startswith("s")
+
+
+def _session_dirs() -> list[pathlib.Path]:
+    if not SESSIONS_DIR.exists():
+        return []
+    return sorted(
+        (p for p in SESSIONS_DIR.iterdir() if _is_session_dir(p)),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+
+
 def load_session(sid):
     sd = SESSIONS_DIR / sid
+    if not _is_session_dir(sd):
+        raise RuntimeError(f"Not a session directory: {sid!r}")
     nodes = []
-    for f in sorted((sd / "nodes").glob("n_*.json")):
-        try: nodes.append(json.loads(f.read_text()))
-        except Exception: pass
+    nodes_dir = sd / "nodes"
+    if nodes_dir.is_dir():
+        for f in sorted(nodes_dir.glob("n_*.json")):
+            try:
+                nodes.append(json.loads(f.read_text()))
+            except Exception:
+                pass
     qf = sd / "query.txt"
     query = qf.read_text().strip() if qf.exists() else ""
     return query, nodes
 
+
 def latest_sid():
-    sess = sorted(SESSIONS_DIR.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True)
-    if not sess: raise RuntimeError("No sessions found")
+    sess = _session_dirs()
+    if not sess:
+        raise RuntimeError(
+            f"No sessions found under {SESSIONS_DIR} "
+            "(expected directories named s9-…)"
+        )
     return sess[0].name
 
 # ── screenshot embedding ──────────────────────────────────────────────────────
@@ -155,7 +181,63 @@ def find_legends(sid):
     return legends
 
 
-# ── Section 1: User Goal ──────────────────────────────────────────────────────
+# ── browser action compliance ─────────────────────────────────────────────────
+VISIBLE_ACTION_TYPES = frozenset({
+    "click", "type", "key", "scroll", "drag", "select", "submit",
+})
+
+
+def count_interactive_browser_actions(nodes) -> int:
+    """Count non-terminal browser actions (click, scroll, filter, etc.)."""
+    count = 0
+    for nd in nodes:
+        if nd.get("skill") != "browser":
+            continue
+        out = (nd.get("result") or {}).get("output", {}) or {}
+        for step in out.get("actions") or []:
+            for action in step.get("actions") or []:
+                if action.get("type") in VISIBLE_ACTION_TYPES:
+                    count += 1
+    return count
+
+
+def browser_action_compliance_banner(nodes) -> str:
+    """Banner showing whether the session meets the ≥3 visible actions requirement."""
+    count = count_interactive_browser_actions(nodes)
+    browser_nodes = [n for n in nodes if n.get("skill") == "browser"]
+    if not browser_nodes:
+        return ""
+    ok = count >= 3
+    border = "#86efac" if ok else "#fca5a5"
+    bg = "#f0fdf4" if ok else "#fef2f2"
+    color = "#166534" if ok else "#991b1b"
+    icon = "✓" if ok else "⚠"
+    msg = (
+        f"{icon} <b>{count}</b> visible browser action(s) recorded "
+        f"(requirement: ≥3 — filter, sort, click, scroll, type, etc.). "
+        f"Passive extract-only paths do not satisfy this."
+        if ok
+        else f"{icon} Only <b>{count}</b> visible browser action(s) recorded "
+             f"(requirement: ≥3). Re-run with an interactive goal on the base URL."
+    )
+    return (
+        f'<div style="margin-bottom:24px;padding:12px 16px;background:{bg};'
+        f'border:1px solid {border};border-radius:10px;font-size:0.85rem;color:{color}">'
+        f'{msg}</div>'
+    )
+
+
+def _action_compliance_summary(nodes) -> str:
+    count = count_interactive_browser_actions(nodes)
+    ok = count >= 3
+    color = "#16a34a" if ok else "#dc2626"
+    label = "meets requirement" if ok else "below requirement (need ≥3)"
+    return (
+        f'<div><b style="color:#374151">Visible browser actions:</b> '
+        f'<span style="color:{color};font-weight:700">{count}</span> '
+        f'<span style="color:#64748b">({label})</span></div>'
+    )
+
 def sec1_goal(query):
     return card(
         f'<p style="font-size:1rem;color:#1e293b;margin:0;line-height:1.6">'
@@ -400,7 +482,15 @@ def sec4_actions(nodes):
     if not browser_nodes:
         return card('<p style="color:#9ca3af;margin:0">No browser nodes in this session.</p>')
 
-    html_out = ""
+    count = count_interactive_browser_actions(nodes)
+    summary = (
+        f'<div style="margin-bottom:12px;padding:8px 12px;background:#faf5ff;'
+        f'border:1px solid #ddd6fe;border-radius:8px;font-size:0.8rem;color:#5b21b6">'
+        f'Visible actions: <b>{count}</b> · requirement: ≥3 (click, scroll, filter, sort, type…)'
+        f'</div>'
+    )
+
+    html_out = summary
     for nd in browser_nodes:
         out     = (nd.get("result") or {}).get("output", {}) or {}
         actions = out.get("actions") or []
@@ -695,6 +785,7 @@ def sec8_summary(nodes, sid: str = ""):
   background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:16px">
   <div><b style="color:#374151">Total nodes:</b> {len(nodes)}</div>
   <div><b style="color:#374151">Browser turns:</b> {total_turns}</div>
+  {_action_compliance_summary(nodes)}
   <div><b style="color:#374151">Total elapsed:</b> {total_elapsed:.1f}s</div>
   <div><b style="color:#374151">Providers:</b> {e(prov_str) or "—"}</div>
 </div>{cost_html}"""
@@ -740,6 +831,7 @@ def build_html(sid, query, nodes, arch_note: str = ""):
     ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     s0 = sec0_architecture(arch_note)
+    compliance = browser_action_compliance_banner(nodes)
     s1 = section(1, "Original User Goal",        sec1_goal(query),              "#6366f1")
     s2 = section(2, "Planner DAG",               sec2_dag(nodes),               "#4f46e5")
     s3 = section(3, "Browser Path Chosen",        sec3_browser_path(nodes),      "#7c3aed")
@@ -801,6 +893,7 @@ def build_html(sid, query, nodes, arch_note: str = ""):
   </div>
 
   {f'<div id="s0">{s0}</div>' if s0 else ''}
+  {compliance}
   <div id="s1">{s1}</div>
   <div id="s2">{s2}</div>
   <div id="s3">{s3}</div>
@@ -840,9 +933,7 @@ def write_report(sid: str | None = None) -> pathlib.Path:
 def build_session_index() -> pathlib.Path:
     """Build an index.html listing all sessions with report links."""
     rows = ""
-    for sd in sorted(SESSIONS_DIR.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
-        if not sd.is_dir() or not sd.name.startswith("s"):
-            continue
+    for sd in _session_dirs():
         qf = sd / "query.txt"
         query = qf.read_text(encoding="utf-8").strip()[:120] if qf.exists() else "—"
         tk = sd / "task_key.txt"

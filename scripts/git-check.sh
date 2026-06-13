@@ -36,6 +36,7 @@ echo
 echo "-- forbidden paths check --"
 while IFS= read -r f; do
   case "$f" in
+    *.env.example|*/.env.example) continue ;;
     *.env|*/.env|*/.env.*) echo "BLOCKED: $f"; fail=1 ;;
     */.venv/*|*/__pycache__/*) echo "BLOCKED: $f"; fail=1 ;;
     */state/sessions/s9-*|*/state/sessions/s8-*) echo "BLOCKED: $f"; fail=1 ;;

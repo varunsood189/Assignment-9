@@ -12,8 +12,9 @@ Procedure:
      (numbered list, comparison table, one paragraph) to what the
      question actually asked.
   4. For comparison queries (N tools, products, models), render a
-     readable markdown section per item with bullet points — NOT raw
-     JSON field dumps. Never paste the distiller's `fields` dict
+     markdown **comparison table** with one row per item and columns
+     for each requested field — NOT raw JSON field dumps and NOT only
+     bullet sections. Never paste the distiller's `fields` dict
      verbatim into `final_answer`.
 
 Output schema (JSON, no prose, no markdown fences):

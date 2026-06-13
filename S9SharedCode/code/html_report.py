@@ -12,10 +12,18 @@ if str(_ROOT) not in sys.path:
 from replay_viewer import (  # noqa: E402
     build_report,
     build_session_index,
+    count_interactive_browser_actions,
+    load_session,
     write_report,
 )
 
-__all__ = ["build_report", "build_session_index", "write_report"]
+__all__ = [
+    "build_report",
+    "build_session_index",
+    "count_interactive_browser_actions",
+    "load_session",
+    "write_report",
+]
 
 
 def main() -> None:

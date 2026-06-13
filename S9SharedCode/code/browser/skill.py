@@ -39,6 +39,7 @@ from schemas import AgentResult, BrowserOutput, NodeSpec
 from .client import V9Client
 from .driver import A11yDriver, DriverConfig, DriverResult, SetOfMarksDriver
 from .extract_utils import is_useful_extract as _is_useful_extract
+from .extract_utils import normalize_url_for_goal as _normalize_url_for_goal
 
 
 # ── gateway-block detection ──────────────────────────────────────────────────
@@ -133,6 +134,7 @@ class BrowserSkill:
     async def run(self, node: NodeSpec) -> AgentResult:
         url = node.metadata.get("url") or (node.inputs[0] if node.inputs else "")
         goal = node.metadata.get("goal") or "extract main content"
+        url = _normalize_url_for_goal(url, goal)
         # Optional escape hatch: skip the natural cascade and pin to a specific
         # layer. Used by the spec's vision-escalation smoke test when the
         # natural cascade would short-circuit on a richer earlier layer.

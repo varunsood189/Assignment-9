@@ -69,6 +69,9 @@ TASKS: dict[str, dict] = {
         "label": "HuggingFace text-generation by likes",
         "query": (
             "Compare top 3 Hugging Face text-generation models sorted by likes. "
+            "Use the browser on https://huggingface.co/models (base URL). "
+            "Perform at least three visible browser actions (filter Tasks, sort by "
+            "Most Likes, read model cards). Passive scraping is not acceptable. "
             "For each give model name, organisation, likes, parameter count if listed, "
             "and a one-line description."
         ),
@@ -138,7 +141,10 @@ async def _run_task(key: str, generate_report: bool = True) -> dict:
     try:
         await Executor().run(t["query"])
         sessions_dir = Path(__file__).parent / "state" / "sessions"
-        sessions = sorted(sessions_dir.iterdir(), key=lambda p: p.stat().st_mtime)
+        sessions = sorted(
+            (p for p in sessions_dir.iterdir() if p.is_dir() and p.name.startswith("s")),
+            key=lambda p: p.stat().st_mtime,
+        )
         if sessions:
             sid = sessions[-1].name
             sd = sessions_dir / sid
