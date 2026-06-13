@@ -1,0 +1,26 @@
+# S9SharedCode — runtime output (source of truth: ../.gitignore)
+# Keep this file so the folder is self-describing when copied standalone.
+
+logs/*
+!logs/.gitkeep
+
+code/.env
+code/.venv/
+code/__pycache__/
+code/.pytest_cache/
+code/.last_session_id
+code/usage.json
+
+code/state/memory.json
+code/state/index.faiss
+code/state/index_ids.json
+code/state/artifacts/*
+!code/state/artifacts/.gitkeep
+code/state/sessions/*
+!code/state/sessions/.gitkeep
+code/state/sessions/index.html
+
+code/sandbox/*
+!code/sandbox/.gitkeep
+!code/sandbox/papers/
+!code/sandbox/papers/**

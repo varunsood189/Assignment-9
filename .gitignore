@@ -1,0 +1,76 @@
+# ── Secrets (never commit) ───────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.local
+**/.env.*.local
+!**/.env.example
+
+# ── Local duplicates / archives (not the canonical submission tree) ───────
+S9SharedCode_1/
+archive Assignment 9/
+
+# ── Python ───────────────────────────────────────────────────────────────
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+*.egg-info/
+dist/
+build/
+**/.venv/
+
+# ── Runtime state (regenerated every run) ─────────────────────────────────
+**/state/memory.json
+**/state/index.faiss
+**/state/index_ids.json
+**/state/artifacts/*
+!**/state/artifacts/.gitkeep
+**/state/sessions/*
+!**/state/sessions/.gitkeep
+**/state/sessions/index.html
+**/state/sessions/**/browser/
+**/graph.pkl
+**/.last_session_id
+
+# Demo / run logs (regenerated)
+S9SharedCode/logs/*
+!S9SharedCode/logs/.gitkeep
+
+# MCP usage counters
+**/usage.json
+
+# Sandbox scratch (keep papers/, ignore ad-hoc files)
+**/sandbox/*
+!**/sandbox/.gitkeep
+!**/sandbox/papers/
+!**/sandbox/papers/**
+
+# ── Gateway local data ───────────────────────────────────────────────────
+llm_gatewayV9/*.db
+llm_gatewayV9/gateway_v9.db
+llm_gatewayV9/**/*.db
+
+# ── Generated HTML reports (regenerate with replay_viewer.py) ─────────────
+**/state/sessions/**/report.html
+**/state/sessions/**/io_report.html
+**/logs/*_replay.html
+**/logs/*_io_replay.html
+**/logs/*.log
+
+# ── OS / editors ─────────────────────────────────────────────────────────
+.DS_Store
+**/.DS_Store
+__MACOSX/
+**/__MACOSX/
+.vscode/
+.idea/
+*.swp
+*~
+.cursor/
+
+# ── Playwright browser cache (install via: playwright install chromium) ───
+**/playwright/.cache/
+**/ms-playwright/
