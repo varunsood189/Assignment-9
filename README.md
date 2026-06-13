@@ -271,16 +271,6 @@ Assignment 9/
 
 ---
 
-## Submission Checklist
-
-- [ ] Live run completes with **≥3 visible browser actions** (check §4 banner in `report.html`)
-- [ ] `report.html` contains all **8 sections** listed above
-- [ ] §7 shows a **structured comparison table** (not raw JSON)
-- [ ] Session trace persisted under `S9SharedCode/code/state/sessions/<sid>/`
-- [ ] Gateway + Playwright installed (`uv sync`, `playwright install chromium`)
-- [ ] Repo pushed to GitHub with this README
-
----
 
 ## Dependencies
 
