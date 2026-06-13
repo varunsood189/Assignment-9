@@ -1,0 +1,25 @@
+# See Assignment 9/.gitignore and ../.gitignore for the full policy.
+
+.env
+.env.*
+!.env.example
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.last_session_id
+usage.json
+
+state/memory.json
+state/index.faiss
+state/index_ids.json
+state/artifacts/*
+!state/artifacts/.gitkeep
+state/sessions/*
+!state/sessions/.gitkeep
+state/sessions/index.html
+
+sandbox/*
+!sandbox/.gitkeep
+!sandbox/papers/
+!sandbox/papers/**
