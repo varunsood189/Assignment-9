@@ -23,3 +23,4 @@ retriever: gemini
 sandbox_executor: gemini
 coder: gemini
 browser: gemini
+computer: gemini

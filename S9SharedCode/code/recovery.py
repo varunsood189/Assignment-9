@@ -84,6 +84,11 @@ def plan_recovery(
             action="skip", reason=reason,
             note="transient gateway error; gateway retry exhausted, not re-planning",
         )
+    if "precondition_blocked" in (error_text or "").lower():
+        return RecoveryDecision(
+            action="skip", reason=reason,
+            note="desktop permission precondition not met; grant OS permissions and retry",
+        )
     if reason == "validation_error":
         return RecoveryDecision(
             action="skip", reason=reason,

@@ -55,6 +55,10 @@ def trace_node(
         content = out.get("content") or ""
         print(f"    │  path: {out.get('path')}  url: {_clip(out.get('url', ''), 80)}", flush=True)
         print(f"    │  content: {_clip(content, 400)}", flush=True)
+    elif skill == "computer":
+        content = out.get("content") or ""
+        print(f"    │  path: {out.get('path')}  app: {_clip(out.get('app', ''), 80)}", flush=True)
+        print(f"    │  content: {_clip(content, 400)}", flush=True)
     elif skill == "distiller":
         fields = out.get("fields") if isinstance(out.get("fields"), dict) else {}
         print(f"    │  fields: {_fields_preview(fields)}", flush=True)

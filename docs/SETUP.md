@@ -53,6 +53,7 @@ python3 replay_viewer.py
 
 | Issue | Fix |
 |-------|-----|
+| `lxml` build fails / “libxml2 and libxslt development packages” | Use Python 3.12 (not 3.14): `uv python install 3.12 && uv sync --python 3.12`. If you must stay on 3.14: `sudo apt install libxml2-dev libxslt1-dev python3-dev build-essential` then retry `uv sync`. |
 | `Executable doesn't exist` (Playwright) | `cd code && uv run playwright install chromium` |
 | No LLM output / 502 | Gateway not running on `:8109` |
 | JustDial / HTTP2 errors on CNC | Use Sulekha URL via `get_cnc_browser_url()` — see demos.py |

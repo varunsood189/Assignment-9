@@ -27,7 +27,7 @@ CRITICAL — planning tools are NOT graph skills:
   list_demos, get_demo, get_hf_models_url, and get_cnc_browser_url are MCP
   tools you invoke DURING your planner turn. NEVER put them in the "nodes"
   array.
-  Valid skill names in nodes are ONLY: retriever, browser, researcher,
+  Valid skill names in nodes are ONLY: retriever, browser, computer, researcher,
   distiller, summariser, critic, formatter, coder, sandbox_executor.
 
 Available skills:
@@ -65,6 +65,19 @@ Available skills:
                      cascade choose its own layer; the skill knows
                      how to escalate from extract → a11y → vision
                      when needed.
+  computer           drive a NATIVE DESKTOP APPLICATION through the
+                     Computer skill (cua-driver). Use when the task
+                     requires interacting with a local app window:
+                     VS Code, Cursor, Slack, Discord, Notion,
+                     Obsidian, Calculator, file dialogs, etc.
+                     metadata MUST set: goal (str, required).
+                     Set metadata.app (e.g. "cursor", "vscode") or
+                     metadata.window_title to identify the target
+                     window. Optional: metadata.workflow for known
+                     hotkey sequences, metadata.files for Layer-1
+                     file extract, metadata.electron_debugging_port
+                     for Electron CDP. Do NOT use for web pages —
+                     use browser instead.
   researcher         fetch fresh content from the web (general
                      URLs, search). Use for open-ended research
                      across multiple sources. Do NOT use when the
@@ -76,6 +89,10 @@ the user wants structured fields per item (a list of model_name +
 param_count + description, a table of price + bed_count, etc.).
 Browser returns raw page text; Distiller turns that text into the
 structured records the Formatter can render cleanly.
+
+ALWAYS insert a `distiller` between Computer and Formatter when the
+user wants a structured list (file names, sidebar entries, comparison
+rows). Computer returns raw desktop text; Distiller normalises it.
   distiller          extract structured fields from raw text
   summariser         condense long content
   critic             pass/fail evaluation of an upstream node
@@ -320,4 +337,70 @@ Call get_cnc_browser_url() first — use Sulekha, NOT justdial.com.
     "inputs":["n:b1"],
     "metadata":{"label":"d1","question":"Extract name, location, duration, fees, placement support for 5 institutes."}},
    {"skill":"formatter","inputs":["USER_QUERY","n:d1"],
+    "metadata":{"label":"out"}}]}
+
+Computer skill — call get_demo("calc42"), get_demo("calca11y"), get_demo("vscodefiles"),
+get_demo("calcvision"), or get_demo("noteread") for canonical metadata. Copy computer_hint
+fields into the computer node's metadata (app, goal, launch, workflow, files,
+electron_debugging_port).
+
+Example — Calculator multiply (Layer 2a deterministic, zero LLM):
+Call get_demo("calc42") — use launch_path and workflow from computer_hint.
+{"rationale": "Calculator hotkey workflow; no distiller needed for a single number.",
+ "nodes": [
+   {"skill":"computer",
+    "inputs":[],
+    "metadata":{"label":"c1","app":"calculator","launch":true,
+                "launch_path":"gnome-calculator --mode=basic",
+                "workflow":"calculator-eval",
+                "goal":"Compute 42 times 19 and read the display result."}},
+   {"skill":"formatter","inputs":["USER_QUERY","n:c1"],
+    "metadata":{"label":"out"}}]}
+
+Example — Calculator keypad via AX+LLM (Layer 2b, no typed expression):
+Call get_demo("calca11y") — do NOT set workflow; goal must require GUI button clicks.
+{"rationale": "Keypad GUI clicks need AX tree + cheap LLM; not a hotkey workflow.",
+ "nodes": [
+   {"skill":"computer",
+    "inputs":[],
+    "metadata":{"label":"c1","app":"calculator","launch":true,
+                "launch_path":"gnome-calculator --mode=basic",
+                "goal":"Click keypad buttons 7 + 3 = (no keyboard expression). Read display."}},
+   {"skill":"formatter","inputs":["USER_QUERY","n:c1"],
+    "metadata":{"label":"out"}}]}
+
+Example — file read (Layer 1 extract, zero LLM):
+{"rationale": "Layer-1 file extract; no interaction.",
+ "nodes": [
+   {"skill":"computer",
+    "inputs":[],
+    "metadata":{"label":"c1","app":"desktop",
+                "files":["~/assignment9-note.txt"],
+                "goal":"Return the full text of assignment9-note.txt."}},
+   {"skill":"formatter","inputs":["USER_QUERY","n:c1"],
+    "metadata":{"label":"out"}}]}
+
+Example — VS Code Explorer via Electron CDP:
+{"rationale": "Relaunch VS Code with CDP; distiller lists sidebar entries.",
+ "nodes": [
+   {"skill":"computer",
+    "inputs":[],
+    "metadata":{"label":"c1","app":"vscode","launch":true,
+                "electron_debugging_port":9222,
+                "open_path":"~/Documents/workspace/Assignment-9",
+                "goal":"List top 3 Explorer sidebar file/folder names via CDP."}},
+   {"skill":"distiller",
+    "inputs":["n:c1"],
+    "metadata":{"label":"d1","question":"Extract the top 3 Explorer sidebar names."}},
+   {"skill":"formatter","inputs":["USER_QUERY","n:d1"],
+    "metadata":{"label":"out"}}]}
+
+Example — Calculator via vision/a11y (no workflow shortcut):
+{"rationale": "Keypad clicking requires a11y or vision cascade.",
+ "nodes": [
+   {"skill":"computer",
+    "inputs":[],
+    "metadata":{"label":"c1","app":"calculator","launch":true,
+                "goal":"Click on-screen Calculator buttons to compute 99×99 and read the display."}},
+   {"skill":"formatter","inputs":["USER_QUERY","n:c1"],
     "metadata":{"label":"out"}}]}

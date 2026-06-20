@@ -1,0 +1,75 @@
+# Layer 2a — deterministic desktop workflows (no LLM).
+# Matched by metadata.workflow or metadata.app against `match` fields.
+
+gnome-calculator:
+  match_title: Calculator
+  match_app: calculator
+  steps:
+    - action: hotkey
+      keys: ["ctrl", "l"]
+
+calculator-eval:
+  match_title: Calculator
+  match_app: calculator
+  steps:
+    - action: press_key
+      key: Escape
+    - action: press_key
+      key: Escape
+    - action: hotkey
+      keys: ["ctrl", "l"]
+    - action: type_text
+      text: "{expression}"
+    - action: click_label
+      label: "="
+    - action: wait
+      ms: 800
+
+gedit:
+  match_title: gedit
+  match_app: gedit
+  steps:
+    - action: hotkey
+      keys: ["ctrl", "a"]
+
+vscode:
+  match_title: Visual Studio Code
+  match_app: vscode
+  steps:
+    - action: hotkey
+      keys: ["ctrl", "shift", "p"]
+
+cursor:
+  match_title: Cursor
+  match_app: cursor
+  steps:
+    - action: hotkey
+      keys: ["ctrl", "shift", "p"]
+
+slack:
+  match_title: Slack
+  match_app: slack
+  steps:
+    - action: hotkey
+      keys: ["ctrl", "k"]
+
+discord:
+  match_title: Discord
+  match_app: discord
+  steps:
+    - action: hotkey
+      keys: ["ctrl", "k"]
+
+notion:
+  match_title: Notion
+  match_app: notion
+  steps:
+    - action: hotkey
+      keys: ["ctrl", "p"]
+
+obsidian:
+  match_title: Obsidian
+  match_app: obsidian
+  steps:
+    - action: hotkey
+      keys: ["ctrl", "o"]

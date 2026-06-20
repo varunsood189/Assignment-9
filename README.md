@@ -1,4 +1,38 @@
-# Assignment 9 — Browser Agents & Autonomous Web
+# Assignment 9–10 — Browser & Computer-Use Agents
+
+**EAG V3 · Sessions 9–10**
+
+- **Session 9:** Browser skill — four-layer cascade on live web pages.
+- **Session 10:** Computer skill — desktop apps via cua-driver (see [docs/SESSION10_SUBMISSION.md](docs/SESSION10_SUBMISSION.md)).
+
+> Copy [`.env.example`](.env.example) → `.env` before running. Session data and secrets are gitignored.  
+> Session 9 docs: [S9SharedCode/ARCHITECTURE.md](S9SharedCode/ARCHITECTURE.md) · [docs/SETUP.md](docs/SETUP.md) · [docs/BROWSER_CASCADE.md](docs/BROWSER_CASCADE.md)  
+> Session 10 docs: [S9SharedCode/SESSION10_README.md](S9SharedCode/SESSION10_README.md) · [docs/SESSION10_SUBMISSION.md](docs/SESSION10_SUBMISSION.md)
+
+---
+
+## Session 10 quick start (Computer-Use)
+
+```bash
+export QT_ACCESSIBILITY=1
+cua-driver doctor                    # AT-SPI + X11 OK
+cd llm_gatewayV9 && uv run main.py   # terminal 1 — port 8109
+cd S9SharedCode && ./run_computer_assignment.sh all
+python3 replay_viewer.py --open     # latest session report
+```
+
+**Recorded submission sessions:**
+
+| Task | Session | Layer |
+|------|---------|-------|
+| Calculator | `s9-0a0abe10` | deterministic |
+| Note file | `s9-3894791e` | extract |
+| VS Code CDP | `s9-6d234000` | electron |
+| Calculator keypad (vision) | `s9-88310c4c` | vision |
+
+---
+
+# Session 9 — Browser Agents & Autonomous Web
 
 **EAG V3 · Session 9**
 

@@ -539,6 +539,28 @@ async def run_skill(skill: Skill, node_id: str, graph_nodes,
             result.elapsed_s = time.time() - started
         return result, rendered
 
+    if skill.name == "computer":
+        node_dict = graph_nodes[node_id]
+        node_spec = NodeSpec(
+            skill="computer",
+            inputs=node_dict.get("inputs") or [],
+            metadata=node_dict.get("metadata") or {},
+        )
+        from computer.skill import ComputerSkill
+        meta = node_dict.get("metadata") or {}
+        label = meta.get("label") or meta.get("app") or meta.get("window_title", "?")
+        print(f"[{node_id}] computer → {label}", flush=True)
+        sk = ComputerSkill(
+            artifacts_root=str(ROOT / "state" / "sessions" / session_id / "computer"),
+            session=session_id,
+            a11y_provider_pin="gemini",
+            vision_provider_pin="gemini",
+        )
+        result = await sk.run(node_spec)
+        if not result.elapsed_s:
+            result.elapsed_s = time.time() - started
+        return result, rendered
+
     tools = tool_payload(skill.tools_allowed)
     if tools:
         # Multi-turn tool-use loop. mcp_runner opens one MCP stdio session

@@ -99,3 +99,15 @@ browser:
     chosen layer surfaced as output.path. Use when Researcher's
     fetch_url is insufficient: JavaScript-rendered content, interactive
     widgets, multi-page workflows.
+
+computer:
+  prompt: prompts/computer.md
+  temperature: 0.0
+  max_tokens: 1024
+  description: |
+    Drives native desktop applications through cua-driver with a four-layer
+    cascade (extract, deterministic, a11y, vision). metadata.app or
+    metadata.window_title identifies the target window; metadata.goal
+    (required) describes the task. Returns ComputerOutput with output.path.
+    Use for desktop apps (VS Code, Cursor, Calculator, Slack, etc.) when
+    browser cannot reach the UI.

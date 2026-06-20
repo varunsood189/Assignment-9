@@ -148,6 +148,90 @@ DEMO_REGISTRY: dict[str, dict] = {
             "placement support for 5 CNC/VMC training institutes."
         ),
     },
+    # Session 10 — Computer skill assignment tasks
+    "calc42": {
+        "query": (
+            "Open the Calculator app and compute 42 times 567. "
+            "Report the numeric result shown on the display."
+        ),
+        "shape": "planner -> computer -> formatter",
+        "computer_hint": {
+            "app": "calculator",
+            "launch": True,
+            "launch_path": "gnome-calculator --mode=basic",
+            "kill_existing": True,
+            "workflow": "calculator-eval",
+            "goal": "Compute the expression from USER_QUERY and read the display result.",
+        },
+    },
+    "calca11y": {
+        "query": (
+            "Open Calculator in basic mode. Click the on-screen keypad buttons "
+            "to compute 7 plus 3 (press 7, then plus, then 3, then equals). "
+            "Do not type the expression with the keyboard. Report the numeric "
+            "result on the display."
+        ),
+        "shape": "planner -> computer -> formatter",
+        "computer_hint": {
+            "app": "calculator",
+            "launch": True,
+            "launch_path": "gnome-calculator --mode=basic",
+            "kill_existing": True,
+            "goal": (
+                "Click Calculator keypad buttons 7 + 3 = using the GUI only "
+                "(no keyboard expression shortcut). Read the display result."
+            ),
+        },
+    },
+    "noteread": {
+        "query": (
+            "Read the file ~/assignment9-note.txt and return its full text verbatim."
+        ),
+        "shape": "planner -> computer -> formatter",
+        "computer_hint": {
+            "app": "desktop",
+            "goal": "Read assignment9-note.txt via Layer-1 file extract (no LLM).",
+            "files": ["~/assignment9-note.txt"],
+        },
+    },
+    "vscodefiles": {
+        "query": (
+            "Open Visual Studio Code on the Assignment-9 project folder with "
+            "remote debugging enabled, then list the top 3 file or folder names "
+            "visible in the Explorer sidebar."
+        ),
+        "shape": "planner -> computer -> distiller -> formatter",
+        "computer_hint": {
+            "app": "vscode",
+            "launch": True,
+            "kill_existing": True,
+            "electron_debugging_port": 9222,
+            "open_path": "~/Documents/workspace/Assignment-9",
+            "goal": (
+                "List the top 3 entries in the VS Code Explorer sidebar via "
+                "Electron CDP (metadata.electron_debugging_port=9222)."
+            ),
+        },
+        "distiller_question": (
+            "Extract the top 3 file or folder names from the VS Code Explorer sidebar."
+        ),
+    },
+    "calcvision": {
+        "query": (
+            "Open Calculator and compute 99 times 99 by interacting with the "
+            "on-screen buttons (do not use a typed expression shortcut). "
+            "Report the result shown on the display."
+        ),
+        "shape": "planner -> computer -> formatter",
+        "computer_hint": {
+            "app": "calculator",
+            "launch": True,
+            "goal": (
+                "Click Calculator keypad buttons to compute 99×99; escalate to "
+                "a11y or vision layers as needed."
+            ),
+        },
+    },
 }
 
 
@@ -180,6 +264,10 @@ def get_demo(name: str) -> dict:
     }
     if hint := entry.get("browser_hint"):
         out["browser_hint"] = dict(hint)
+    if hint := entry.get("computer_hint"):
+        out["computer_hint"] = dict(hint)
+    if dq := entry.get("distiller_question"):
+        out["distiller_question"] = dq
     return out
 
 

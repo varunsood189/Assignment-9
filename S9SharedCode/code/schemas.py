@@ -118,6 +118,7 @@ ErrorCode = Literal[
     "interaction_failed",    # could not complete the goal within turn cap
     "timeout",               # wall-clock cap hit
     "vlm_unavailable",       # all vision providers refused or 503'd
+    "precondition_blocked",  # OS permissions / accessibility prerequisites missing
 ]
 
 
@@ -154,6 +155,25 @@ class BrowserOutput(BaseModel):
     content: str | None = None
     actions: list[dict] = Field(default_factory=list)
     final_url: str | None = None
+
+
+class ComputerOutput(BaseModel):
+    """Session 10: typed payload the Computer skill writes into AgentResult.output.
+
+    `path` is the cascade layer the skill actually used. Downstream skills
+    consume `content`; replay and the Planner's failure routing care about
+    `path`, `actions`, and `trajectory_dir`.
+    """
+
+    app: str
+    goal: str
+    path: Literal["extract", "deterministic", "a11y", "vision", "electron"]
+    turns: int = 0
+    content: str | None = None
+    actions: list[dict] = Field(default_factory=list)
+    pid: int | None = None
+    window_id: int | None = None
+    trajectory_dir: str | None = None
 
 
 class NodeState(BaseModel):

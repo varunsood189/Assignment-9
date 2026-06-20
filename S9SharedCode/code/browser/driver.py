@@ -17,6 +17,7 @@ for the gateway. Nothing else on the shipped path.
 from __future__ import annotations
 
 import asyncio
+import time
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -144,6 +145,9 @@ class DriverConfig:
     max_failures: int = 3
     artifacts_dir: Optional[str] = None
     pause_between_steps: float = 0.5
+    # Gap before each turn's LLM call (after turn 1). Matches the gateway's
+    # gemini cooldown (4s) so multi-turn a11y/vision runs don't 503 on turn 4.
+    pause_before_llm_s: float = 4.5
     # V9 routing pins. Without these, the gateway picks the first eligible
     # provider in its failover ring — which can be the slow local Ollama for
     # text-only calls. Pin to e.g. "gemini" for Layer-2b runs.
@@ -220,6 +224,7 @@ class BaseDriver:
         self.client = client
         self.config = config
         self.steps: list[StepRecord] = []
+        self._last_llm_end = 0.0
 
     def _history_text(self) -> str:
         if not self.steps:
@@ -239,8 +244,13 @@ class BaseDriver:
         raise NotImplementedError
 
     async def step(self, turn: int) -> tuple[bool, bool, str]:
+        if turn > 1 and self.config.pause_before_llm_s > 0 and self._last_llm_end:
+            wait = self.config.pause_before_llm_s - (time.monotonic() - self._last_llm_end)
+            if wait > 0:
+                await asyncio.sleep(wait)
         snap = await enumerate_interactives(self.page)
         parsed, result = await self._decide(snap, turn)
+        self._last_llm_end = time.monotonic()
 
         if not parsed:
             rec = StepRecord(turn, "", [],

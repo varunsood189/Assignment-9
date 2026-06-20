@@ -11,10 +11,19 @@ gateway's V8 ledger so tests can pull real numbers.
 """
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from typing import Any, Optional
 
 import httpx
+
+# Gemini (the default browser pin) enforces a 4s inter-call cooldown in the
+# gateway router. Multi-turn browser runs fire one /v1/chat per turn with
+# only ~0.5s between the click and the next LLM call — turn 4 routinely
+# hits 503 before the cooldown clears unless we pace or retry client-side.
+_RETRYABLE_STATUS = frozenset({429, 502, 503, 504})
+_MAX_POST_ATTEMPTS = 8
+_COOLDOWN_SLEEP_S = 4.5
 
 
 @dataclass
@@ -47,6 +56,34 @@ class V9Client:
         self.timeout = timeout
         # Default session tag for ledger attribution. Per-call overrides win.
         self.session = session
+
+    async def _post_json(self, path: str, body: dict[str, Any]) -> dict:
+        """POST with retries on gateway rate-limit / transient 503s."""
+        url = f"{self.base_url}{path}"
+        last_exc: Exception | None = None
+        async with httpx.AsyncClient(timeout=self.timeout) as c:
+            for attempt in range(_MAX_POST_ATTEMPTS):
+                try:
+                    r = await c.post(url, json=body)
+                    if r.status_code in _RETRYABLE_STATUS:
+                        if attempt >= _MAX_POST_ATTEMPTS - 1:
+                            r.raise_for_status()
+                        wait = _COOLDOWN_SLEEP_S if r.status_code == 503 else min(2.0 * (2 ** attempt), 10.0)
+                        await asyncio.sleep(wait)
+                        continue
+                    r.raise_for_status()
+                    return r.json()
+                except httpx.HTTPStatusError as e:
+                    last_exc = e
+                    code = e.response.status_code
+                    if code in _RETRYABLE_STATUS and attempt < _MAX_POST_ATTEMPTS - 1:
+                        wait = _COOLDOWN_SLEEP_S if code == 503 else min(2.0 * (2 ** attempt), 10.0)
+                        await asyncio.sleep(wait)
+                        continue
+                    raise
+        if last_exc:
+            raise last_exc
+        raise RuntimeError(f"POST {path} failed after {_MAX_POST_ATTEMPTS} attempts")
 
     @staticmethod
     def _normalise(d: dict) -> GatewayResult:
@@ -88,10 +125,7 @@ class V9Client:
         if model:         body["model"] = model
         if provider:      body["provider"] = provider
 
-        async with httpx.AsyncClient(timeout=self.timeout) as c:
-            r = await c.post(f"{self.base_url}/v1/vision", json=body)
-            r.raise_for_status()
-            return self._normalise(r.json())
+        return self._normalise(await self._post_json("/v1/vision", body))
 
     async def chat(
         self,
@@ -125,10 +159,7 @@ class V9Client:
         if model:     body["model"] = model
         if provider:  body["provider"] = provider
 
-        async with httpx.AsyncClient(timeout=self.timeout) as c:
-            r = await c.post(f"{self.base_url}/v1/chat", json=body)
-            r.raise_for_status()
-            return self._normalise(r.json())
+        return self._normalise(await self._post_json("/v1/chat", body))
 
     async def cost_by_agent(self, agent: Optional[str] = None,
                             session: Optional[str] = None) -> dict:

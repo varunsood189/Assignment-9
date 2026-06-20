@@ -37,6 +37,7 @@ SKILL_COLOR = {
     "planner":          ("#4f46e5", "#eef2ff"),
     "researcher":       ("#0891b2", "#ecfeff"),
     "browser":          ("#7c3aed", "#f5f3ff"),
+    "computer":         ("#0d9488", "#f0fdfa"),
     "distiller":        ("#d97706", "#fffbeb"),
     "critic":           ("#dc2626", "#fef2f2"),
     "formatter":        ("#16a34a", "#f0fdf4"),
@@ -141,43 +142,45 @@ def latest_sid():
 
 # ── screenshot embedding ──────────────────────────────────────────────────────
 def find_screenshots(sid):
-    """Return list of (label, base64_png) for all turn screenshots."""
-    browser_root = SESSIONS_DIR / sid / "browser"
+    """Return list of (label, base64_png) for browser + computer turn screenshots."""
     shots = []
-    if not browser_root.exists():
-        return shots
-    for run_dir in sorted(browser_root.iterdir()):
-        for layer_dir in sorted(run_dir.iterdir()):
-            layer_shots = []
-            for f in sorted(layer_dir.glob("turn_*_marked.png")):
-                try:
-                    data = base64.b64encode(f.read_bytes()).decode()
-                    layer_shots.append((f"{layer_dir.name} / {f.stem}", data))
-                except Exception:
-                    pass
-            if not layer_shots:
-                for f in sorted(layer_dir.glob("turn_*_raw.png")):
+    for sub in ("browser", "computer"):
+        root = SESSIONS_DIR / sid / sub
+        if not root.exists():
+            continue
+        for run_dir in sorted(root.iterdir()):
+            for layer_dir in sorted(run_dir.iterdir()):
+                layer_shots = []
+                for f in sorted(layer_dir.glob("turn_*_marked.png")):
                     try:
                         data = base64.b64encode(f.read_bytes()).decode()
-                        layer_shots.append((f"{layer_dir.name} / {f.stem}", data))
+                        layer_shots.append((f"{sub}/{layer_dir.name} / {f.stem}", data))
                     except Exception:
                         pass
-            shots.extend(layer_shots)
+                if not layer_shots:
+                    for f in sorted(layer_dir.glob("turn_*_raw.png")):
+                        try:
+                            data = base64.b64encode(f.read_bytes()).decode()
+                            layer_shots.append((f"{sub}/{layer_dir.name} / {f.stem}", data))
+                        except Exception:
+                            pass
+                shots.extend(layer_shots)
     return shots
 
 def find_legends(sid):
-    """Return list of (label, text) for all turn legend files."""
-    browser_root = SESSIONS_DIR / sid / "browser"
+    """Return list of (label, text) for browser + computer legend files."""
     legends = []
-    if not browser_root.exists():
-        return legends
-    for run_dir in sorted(browser_root.iterdir()):
-        for layer_dir in sorted(run_dir.iterdir()):
-            for f in sorted(layer_dir.glob("turn_*_legend.txt")):
-                try:
-                    legends.append((f"{layer_dir.name}/{f.stem}", f.read_text()))
-                except Exception:
-                    pass
+    for sub in ("browser", "computer"):
+        root = SESSIONS_DIR / sid / sub
+        if not root.exists():
+            continue
+        for run_dir in sorted(root.iterdir()):
+            for layer_dir in sorted(run_dir.iterdir()):
+                for f in sorted(layer_dir.glob("turn_*_legend.txt")):
+                    try:
+                        legends.append((f"{sub}/{layer_dir.name} / {f.stem}", f.read_text(encoding="utf-8")))
+                    except Exception:
+                        pass
     return legends
 
 
@@ -425,8 +428,9 @@ def _fields_to_table(fields: dict) -> str | None:
 # ── Section 3: Browser Path ───────────────────────────────────────────────────
 def sec3_browser_path(nodes):
     browser_nodes = [n for n in nodes if n["skill"] == "browser"]
-    if not browser_nodes:
-        return card('<p style="color:#9ca3af;margin:0">No browser nodes in this session.</p>')
+    computer_nodes = [n for n in nodes if n["skill"] == "computer"]
+    if not browser_nodes and not computer_nodes:
+        return card('<p style="color:#9ca3af;margin:0">No browser or computer nodes in this session.</p>')
 
     rows = ""
     path_icons = {
@@ -462,6 +466,38 @@ def sec3_browser_path(nodes):
             rows += f"""<tr><td colspan="5" style="padding:4px 10px 8px;font-size:0.72rem;color:#dc2626">
               ⚠ {e(err[:200])}</td></tr>"""
 
+    comp_path_icons = {
+        "extract": ("⚡", "#0891b2", "AX / clipboard / files"),
+        "deterministic": ("🎯", "#7c3aed", "Known workflow / hotkeys"),
+        "a11y": ("♿", "#d97706", "AX tree + text LLM"),
+        "vision": ("👁", "#dc2626", "Set-of-Marks vision"),
+        "electron": ("🖥", "#2563eb", "Electron CDP page extract"),
+    }
+    for nd in computer_nodes:
+        out = (nd.get("result") or {}).get("output", {}) or {}
+        path = out.get("path", "—")
+        turns = out.get("turns", 0)
+        app = out.get("app", "")
+        status = nd["status"]
+        err = (nd.get("result") or {}).get("error", "") or ""
+        icon, color, desc = comp_path_icons.get(path, ("❓", "#64748b", path))
+        status_color = "#16a34a" if status == "complete" else "#dc2626"
+        rows += f"""
+<tr style="border-bottom:1px solid #f1f5f9">
+  <td style="padding:8px 10px;font-size:0.78rem;font-weight:600;color:#374151">{e(nd["node_id"])}</td>
+  <td style="padding:8px 10px">
+    <span style="font-size:1.1rem">{icon}</span>
+    <span style="font-size:0.78rem;font-weight:700;color:{color};margin-left:4px">{e(path)}</span>
+    <div style="font-size:0.7rem;color:#9ca3af">{e(desc)}</div>
+  </td>
+  <td style="padding:8px 10px;font-size:0.78rem;color:#374151">{turns}</td>
+  <td style="padding:8px 10px;font-size:0.72rem;color:#64748b;max-width:220px;word-break:break-all">{e(app[:80])}</td>
+  <td style="padding:8px 10px;font-size:0.78rem;color:{status_color};font-weight:700">{e(status)}</td>
+</tr>"""
+        if err:
+            rows += f"""<tr><td colspan="5" style="padding:4px 10px 8px;font-size:0.72rem;color:#dc2626">
+              ⚠ {e(err[:200])}</td></tr>"""
+
     return f"""
 <div style="overflow-x:auto">
 <table style="width:100%;border-collapse:collapse">
@@ -479,24 +515,35 @@ def sec3_browser_path(nodes):
 # ── Section 4: Browser Actions ────────────────────────────────────────────────
 def sec4_actions(nodes):
     browser_nodes = [n for n in nodes if n["skill"] == "browser"]
-    if not browser_nodes:
-        return card('<p style="color:#9ca3af;margin:0">No browser nodes in this session.</p>')
+    computer_nodes = [n for n in nodes if n["skill"] == "computer"]
+    if not browser_nodes and not computer_nodes:
+        return card('<p style="color:#9ca3af;margin:0">No browser or computer nodes in this session.</p>')
 
     count = count_interactive_browser_actions(nodes)
-    summary = (
-        f'<div style="margin-bottom:12px;padding:8px 12px;background:#faf5ff;'
-        f'border:1px solid #ddd6fe;border-radius:8px;font-size:0.8rem;color:#5b21b6">'
-        f'Visible actions: <b>{count}</b> · requirement: ≥3 (click, scroll, filter, sort, type…)'
-        f'</div>'
-    )
+    html_out = ""
+    if browser_nodes:
+        html_out = (
+            f'<div style="margin-bottom:12px;padding:8px 12px;background:#faf5ff;'
+            f'border:1px solid #ddd6fe;border-radius:8px;font-size:0.8rem;color:#5b21b6">'
+            f'Visible browser actions: <b>{count}</b> · requirement: ≥3 '
+            f'(click, scroll, filter, sort, type…)'
+            f'</div>'
+        )
+    elif computer_nodes:
+        html_out = (
+            f'<div style="margin-bottom:12px;padding:8px 12px;background:#f0fdfa;'
+            f'border:1px solid #99f6e4;border-radius:8px;font-size:0.8rem;color:#0f766e">'
+            f'Computer skill actions recorded below (Session 10 — browser ≥3 rule does not apply).'
+            f'</div>'
+        )
 
-    html_out = summary
-    for nd in browser_nodes:
+    for nd in browser_nodes + computer_nodes:
         out     = (nd.get("result") or {}).get("output", {}) or {}
         actions = out.get("actions") or []
         path    = out.get("path", "—")
         goal    = out.get("goal", "")
         nid     = nd["node_id"]
+        skill   = nd["skill"]
 
         if not actions:
             html_out += (f'<p style="color:#9ca3af;font-size:0.8rem">'
@@ -516,24 +563,44 @@ def sec4_actions(nodes):
             ok = "error" not in str(outcome).lower()
             outcome_color = "#16a34a" if ok else "#dc2626"
             act_pills = ""
-            for a in step_actions:
-                atype = a.get("type", "?")
+            if step_actions:
+                for a in step_actions:
+                    atype = a.get("type", "?")
+                    detail = ""
+                    if atype in ("click", "type"):
+                        detail = f" #{a.get('mark','?')}"
+                        if atype == "type":
+                            detail += f" ← {str(a.get('value',''))[:30]}"
+                    elif atype == "key":
+                        detail = f" {a.get('value','')}"
+                    elif atype == "scroll":
+                        detail = f" {a.get('direction','')} {a.get('amount','')}"
+                    elif atype == "done":
+                        detail = f" success={a.get('success','?')}"
+                    color = action_type_color.get(atype, "#374151")
+                    act_pills += (f'<span style="background:{color}22;color:{color};'
+                                  f'border:1px solid {color}44;padding:1px 7px;'
+                                  f'border-radius:999px;font-size:0.7rem;margin-right:4px;'
+                                  f'font-weight:600">{e(atype)}{e(detail)}</span>')
+            elif step.get("action") or step.get("step"):
+                # Layer 2a deterministic workflow log from computer skill.
+                act_name = str(step.get("action") or "?")
+                step_detail = step.get("step") or {}
                 detail = ""
-                if atype in ("click", "type"):
-                    detail = f" #{a.get('mark','?')}"
-                    if atype == "type":
-                        detail += f" ← {str(a.get('value',''))[:30]}"
-                elif atype == "key":
-                    detail = f" {a.get('value','')}"
-                elif atype == "scroll":
-                    detail = f" {a.get('direction','')} {a.get('amount','')}"
-                elif atype == "done":
-                    detail = f" success={a.get('success','?')}"
-                color = action_type_color.get(atype, "#374151")
-                act_pills += (f'<span style="background:{color}22;color:{color};'
-                              f'border:1px solid {color}44;padding:1px 7px;'
-                              f'border-radius:999px;font-size:0.7rem;margin-right:4px;'
-                              f'font-weight:600">{e(atype)}{e(detail)}</span>')
+                if isinstance(step_detail, dict):
+                    if step_detail.get("text"):
+                        detail = f" {str(step_detail['text'])[:40]}"
+                    elif step_detail.get("label"):
+                        detail = f" {step_detail['label']!s}"
+                    elif step_detail.get("keys"):
+                        detail = f" {'+'.join(str(k) for k in step_detail['keys'])}"
+                    elif step_detail.get("key"):
+                        detail = f" {step_detail['key']}"
+                color = action_type_color.get(act_name, "#0d9488")
+                act_pills = (f'<span style="background:{color}22;color:{color};'
+                             f'border:1px solid {color}44;padding:1px 7px;'
+                             f'border-radius:999px;font-size:0.7rem;margin-right:4px;'
+                             f'font-weight:600">{e(act_name)}{e(detail)}</span>')
             rows += f"""
 <tr style="border-bottom:1px solid #f1f5f9">
   <td style="padding:6px 10px;font-size:0.75rem;font-weight:700;color:#64748b;white-space:nowrap">Turn {turn}</td>
@@ -541,7 +608,7 @@ def sec4_actions(nodes):
   <td style="padding:6px 10px;font-size:0.72rem;color:{outcome_color}">{e(str(outcome)[:120])}</td>
 </tr>"""
 
-        f_color, _ = SKILL_COLOR.get("browser", ("#7c3aed","#f5f3ff"))
+        f_color, _ = SKILL_COLOR.get(skill, ("#7c3aed", "#f5f3ff"))
         html_out += f"""
 <div style="margin-bottom:16px;border:1px solid #ddd6fe;border-radius:10px;overflow:hidden">
   <div style="background:#f5f3ff;padding:8px 14px;border-bottom:1px solid #ddd6fe">
@@ -611,7 +678,7 @@ def sec6_extracted(nodes):
         )
 
     for nd in nodes:
-        if nd["skill"] not in ("browser", "researcher", "retriever"):
+        if nd["skill"] not in ("browser", "computer", "researcher", "retriever"):
             continue
         out = (nd.get("result") or {}).get("output", {}) or {}
         content = out.get("content") or out.get("findings") or out.get("chunks", "")
